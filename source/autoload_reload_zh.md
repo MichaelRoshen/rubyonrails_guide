@@ -18,8 +18,6 @@
 简介
 ------------
 
-Ruby on Rails allows applications to be written as if their code was preloaded.
-
 在正常的Ruby程序中类在使用前必须先进行加载
 
 ```ruby
@@ -36,12 +34,8 @@ end
 很多Rubyist会发现上面的代码require是多余的：如果类在定义的时候和该文件名所匹配
 ，为什么还要加载一次，这个问题很容易解决，我们可以查看对应的文件。
 
-此外，`Kernel#require`会加载一次文件，但是在开发环境下，在不用重启服务的情况下更新代码
-
-Moreover, `Kernel#require` loads files once, but development is much more smooth
-if code gets refreshed when it changes without restarting the server. It would
-be nice to be able to use `Kernel#load` in development, and `Kernel#require` in
-production.
+此外，`Kernel#require`会加载一次文件，但是在开发环境下，想要在不用重启服务的情况下
+看到代码的更新，那么在开发环境下使用`Kernel#load`,在生产环境中使用`Kernel#require`非常的棒.
 
 事实上，Ruby on Rails提供了这些特性，我们只需要这样写：
 
@@ -136,7 +130,7 @@ end
 
 * 当程序执行到一个类的body时，`class`关键字后面的类对象入栈，执行完后出栈.
 
-* 当程序执行到一个类的body时，`module`关键字后面的模块对象入栈，执行完后出栈.
+* 当程序执行到一个模块的body时，`module`关键字后面的模块对象入栈，执行完后出栈.
 
 * `class << object`打开单例类时，object入栈，end结束后出栈.
 
