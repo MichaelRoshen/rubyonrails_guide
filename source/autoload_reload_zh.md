@@ -1,26 +1,26 @@
-Autoloading and Reloading Constants
+自动加载和重新加载常量
 ===================================
 
-This guide documents how constant autoloading and reloading works.
+本篇介绍Rails中自动加载和重新加载常量是如何工作的.
 
-After reading this guide, you will know:
+读完本文，你将学到：
 
-* Key aspects of Ruby constants
-* What is `autoload_paths`
-* How constant autoloading works
-* What is `require_dependency`
-* How constant reloading works
-* Solutions to common autoloading gotchas
+* Ruby常量的几个主要方面
+* 什么是 `autoload_paths`
+* 自动加载常量是如何工作的
+* 什么是 `require_dependency`
+* 重新加载常量是如何工作的
+* 常见自动加载常量的陷阱的解决方案
 
 --------------------------------------------------------------------------------
 
 
-Introduction
+简介
 ------------
 
 Ruby on Rails allows applications to be written as if their code was preloaded.
 
-In a normal Ruby program classes need to load their dependencies:
+在正常的Ruby程序中类在使用前必须先进行加载
 
 ```ruby
 require 'application_controller'
@@ -33,16 +33,17 @@ class PostsController < ApplicationController
 end
 ```
 
-Our Rubyist instinct quickly sees some redundancy in there: If classes were
-defined in files matching their name, couldn't their loading be automated
-somehow? We could save scanning the file for dependencies, which is brittle.
+很多Rubyist会发现上面的代码require是多余的：如果类在定义的时候和该文件名所匹配
+，为什么还要加载一次，这个问题很容易解决，我们可以查看对应的文件。
+
+此外，`Kernel#require`会加载一次文件，但是在开发环境下，在不用重启服务的情况下更新代码
 
 Moreover, `Kernel#require` loads files once, but development is much more smooth
 if code gets refreshed when it changes without restarting the server. It would
 be nice to be able to use `Kernel#load` in development, and `Kernel#require` in
 production.
 
-Indeed, those features are provided by Ruby on Rails, where we just write
+事实上，Ruby on Rails提供了这些特性，我们只需要这样写：
 
 ```ruby
 class PostsController < ApplicationController
@@ -52,22 +53,20 @@ class PostsController < ApplicationController
 end
 ```
 
-This guide documents how that works.
+本篇将介绍它是如何工作的
 
 
-Constants Refresher
+常量进阶
 -------------------
 
-While constants are trivial in most programming languages, they are a rich
-topic in Ruby.
+虽然常量在其他编程语言中很常见，但在Ruby中是常量一个内容很丰富的话题.
 
-It is beyond the scope of this guide to document Ruby constants, but we are
-nevertheless going to highlight a few key topics. Truly grasping the following
-sections is instrumental to understanding constant autoloading and reloading.
+这超出了本文的讨论范围，但我们仍然要突出的介绍几个关键主题。
+准确把握以下部分有助于了解autoloading和reload。
 
-### Nesting
+### 嵌套
 
-Class and module definitions can be nested to create namespaces:
+Class和module的嵌套可以用来创建命名空间：
 
 ```ruby
 module XML
@@ -77,19 +76,17 @@ module XML
 end
 ```
 
-The *nesting* at any given place is the collection of enclosing nested class and
-module objects outwards. For example, in the previous example, the nesting at
-(1) is
+嵌套在任何给定的地方是封闭嵌套类的结合或者module对象，举个例子，在上一个例子中
+嵌套（1）如下：
 
 ```ruby
 [XML::SAXParser, XML]
 ```
 
-It is important to understand that the nesting is composed of class and module
-*objects*, it has nothing to do with the constants used to access them, and is
-also unrelated to their names.
+嵌套是由类和module对象组成，和访问他们的常量无关，与他们的名字也没有关系，理解
+这一点非常重要
 
-For instance, while this definition is similar to the previous one:
+举个实例，下面的定义与上一个类似：
 
 ```ruby
 class XML::SAXParser
@@ -97,20 +94,28 @@ class XML::SAXParser
 end
 ```
 
-the nesting in (2) is different:
+但是嵌套（2）却不同：
 
 ```ruby
 [XML::SAXParser]
 ```
 
-`XML` does not belong to it.
+`XML` 并不在这个嵌套中.
 
-We can see in this example that the name of a class or module that belongs to a
-certain nesting does not necessarily correlate with the namespaces at the spot.
-
-Even more, they are totally independent, take for instance
+我们可以看到，在这个例子中类和模块的名字属于特定的嵌套，与命名空间没有关系.
+甚至，他们是完全独立的，例如：
 
 ```ruby
+module X
+  module Y
+  end
+end
+ 
+module A
+  module B
+  end
+end
+ 
 module X::Y
   module A::B
     # (3)
@@ -118,50 +123,42 @@ module X::Y
 end
 ```
 
-The nesting in (3) consists of two module objects:
+嵌套(3)包含了A::B, X::Y两个module对象:
 
 ```ruby
 [A::B, X::Y]
 ```
 
-So, it not only doesn't end in `A`, which does not even belong to the nesting,
-but it also contains `X::Y`, which is independent from `A::B`.
+因此，它不但没有在A处结束，而且A也不在这个嵌套中，但是这个嵌套包含`X::Y`,
+并且与`A::B`相互独立.
 
-The nesting is an internal stack maintained by the interpreter, and it gets
-modified according to these rules:
+嵌套是由Ruby解释器内部堆栈进行维护的，根据以下规则进行修改:
 
-* The class object following a `class` keyword gets pushed when its body is
-executed, and popped after it.
+* 当程序执行到一个类的body时，`class`关键字后面的类对象入栈，执行完后出栈.
 
-* The module object following a `module` keyword gets pushed when its body is
-executed, and popped after it.
+* 当程序执行到一个类的body时，`module`关键字后面的模块对象入栈，执行完后出栈.
 
-* A singleton class opened with `class << object` gets pushed, and popped later.
+* `class << object`打开单例类时，object入栈，end结束后出栈.
 
-* When any of the `*_eval` family of methods is called using a string argument,
-the singleton class of the receiver is pushed to the nesting of the eval'ed
-code.
+* 当instance_eval被字符串调用的时候，接受者的单例被加入到被eval的代码的嵌套中.
 
-* The nesting at the top-level of code interpreted by `Kernel#load` is empty
-unless the `load` call receives a true value as second argument, in which case
-a newly created anonymous module is pushed by Ruby.
+* 顶层作用域的嵌套由`Kernel#load`解释，默认为空，如果`load`方法接受被调用，并
+且第二个参数为true，那么一个匿名的module会被创建并添加到嵌套中.
 
-It is interesting to observe that blocks do not modify the stack. In particular
-the blocks that may be passed to `Class.new` and `Module.new` do not get the
-class or module being defined pushed to their nesting. That's one of the
-differences between defining classes and modules in one way or another.
+我们发现blocks并不会修改nesting堆栈, blocks传递给`Class.new` 和 `Module.new`
+并不会重新定义class和module, 因此也不会改变堆栈信息.
 
-The nesting at any given place can be inspected with `Module.nesting`.
 
-### Class and Module Definitions are Constant Assignments
+### 类和模块的定义就是常量的分配的时候
 
-Let's suppose the following snippet creates a class (rather than reopening it):
+我们假设下面的代码片段来创建一个类:
 
 ```ruby
 class C
 end
 ```
 
+Ruby创建了一个常量'C'在`Object`对象中，并存储在一个常量
 Ruby creates a constant `C` in `Object` and stores in that constant a class
 object. The name of the class instance is "C", a string, named after the
 constant.
