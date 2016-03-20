@@ -18,7 +18,7 @@
 简介
 ------------
 
-在正常的Ruby程序中类在使用前必须先进行加载
+在正常的Ruby程序中类在使用前必须先加载相关的依赖
 
 ```ruby
 require 'application_controller'
@@ -31,11 +31,11 @@ class PostsController < ApplicationController
 end
 ```
 
-很多Rubyist会发现上面的代码require是多余的：如果类在定义的时候和该文件名所匹配
+大多数Rubyist会发现上面的代码require是多余的：如果类在定义的时候和该文件名所匹配
 ，为什么还要加载一次，这个问题很容易解决，我们可以查看对应的文件。
 
-此外，`Kernel#require`会加载一次文件，但是在开发环境下，想要在不用重启服务的情况下
-看到代码的更新，那么在开发环境下使用`Kernel#load`,在生产环境中使用`Kernel#require`非常的棒.
+此外，`Kernel#require`会加载一次文件，想要在不用重启服务的情况下
+看到代码的更新，使开发更顺畅，在开发环境下使用`Kernel#load`,在生产环境中使用`Kernel#require`.
 
 事实上，Ruby on Rails提供了这些特性，我们只需要这样写：
 
@@ -70,7 +70,8 @@ module XML
 end
 ```
 
-嵌套在任何给定的地方是封闭嵌套类的结合或者module对象，举个例子，在上一个例子中
+嵌套在任何给定的地方是封闭嵌套类的结合或者module对象，
+通过Module.nesting来查看嵌套的层级关系，举个例子，在上一个例子中
 嵌套（1）如下：
 
 ```ruby
@@ -143,7 +144,7 @@ end
 并不会重新定义class和module, 因此也不会改变堆栈信息.
 
 
-### 类和模块的定义就是常量的分配的时候
+### 类和模块的定义决定常量的分配
 
 我们假设下面的代码片段来创建一个类:
 
@@ -152,53 +153,50 @@ class C
 end
 ```
 
-Ruby创建了一个常量'C'在`Object`对象中，并存储在一个常量
-Ruby creates a constant `C` in `Object` and stores in that constant a class
-object. The name of the class instance is "C", a string, named after the
-constant.
+Ruby创建了一个常量`C`在`Object`对象中，并存储在常量类对象中，
+并给这个实例的设置一个名字为"C"（Object.const_get("C")）
 
-That is,
+
+更确切的说,
 
 ```ruby
 class Project < ActiveRecord::Base
 end
 ```
 
-performs a constant assignment equivalent to
+等同于常量的赋值
 
 ```ruby
 Project = Class.new(ActiveRecord::Base)
 ```
 
-including setting the name of the class as a side-effect:
+同时也给常量设置了一个名字:
 
 ```ruby
 Project.name # => "Project"
 ```
 
-Constant assignment has a special rule to make that happen: if the object
-being assigned is an anonymous class or module, Ruby sets the object's name to
-the name of the constant.
+常量的赋值有一个特殊的规则，当这个指定的对象是一个匿名类或者模块，Ruby会
+把常量的名字设置为这个对象的名字.
 
-INFO. From then on, what happens to the constant and the instance does not
-matter. For example, the constant could be deleted, the class object could be
-assigned to a different constant, be stored in no constant anymore, etc. Once
-the name is set, it doesn't change.
 
-Similarly, module creation using the `module` keyword as in
+INFO. 现在不管这个常量和这个对象发生了什么，例如，常量可以被删除，
+类对象可以被分配到一个不同的常量，或者没有分配常量等等，一旦名字被设置，它不改变。
+
+同样，模块的创建使用关键字`module`
 
 ```ruby
 module Admin
 end
 ```
 
-performs a constant assignment equivalent to
+等同于常量的赋值
 
 ```ruby
 Admin = Module.new
 ```
 
-including setting the name as a side-effect:
+同时也给常量设置了一个名字:
 
 ```ruby
 Admin.name # => "Admin"
@@ -214,7 +212,7 @@ class object stored in the constant called "String" in the class object stored
 in the `Object` constant. `String` is otherwise an ordinary Ruby constant and
 everything related to constants such as resolution algorithms applies to it.
 
-Likewise, in the controller
+同样的，在Controller中
 
 ```ruby
 class PostsController < ApplicationController
@@ -224,22 +222,19 @@ class PostsController < ApplicationController
 end
 ```
 
-`Post` is not syntax for a class. Rather, `Post` is a regular Ruby constant. If
-all is good, the constant evaluates to an object that responds to `all`.
+`Post`不是一个标准类的写法，而是一个普通的Ruby常量，如果Post.all调用正常
+说明常量等同于对象，可以相应`all`.
 
-That is why we talk about *constant* autoloading, Rails has the ability to
-load constants on the fly.
+这就是为什么我们要讨论的常量的自动加载，Rails可以在运行时加载常量.
 
-### Constants are Stored in Modules
+### 常量存储在Modules中
 
-Constants belong to modules in a very literal sense. Classes and modules have
-a constant table; think of it as a hash table.
+字面意义上讲，常量属于模块. 类和模块有一个常量表，可以想象成一个hash表.
 
-Let's analyze an example to really understand what that means. While common
-abuses of language like "the `String` class" are convenient, the exposition is
-going to be precise here for didactic purposes.
+让我们来通过一个例子来理解这个概念，我们知道在大多数语言中String类使用起来非常方便
+，下面我们会详细的阐述.
 
-Let's consider the following module definition:
+我们先来看下面这个模块的定义:
 
 ```ruby
 module Colors
@@ -247,82 +242,68 @@ module Colors
 end
 ```
 
-First, when the `module` keyword is processed the interpreter creates a new
-entry in the constant table of the class object stored in the `Object` constant.
-Said entry associates the name "Colors" to a newly created module object.
-Furthermore, the interpreter sets the name of the new module object to be the
-string "Colors".
+首先，当解释器执行到`module`关键字的时候，会在Object类对象的常量表中创建一个实体，
+并存储在`Object`中."Colors"会关联到这个新创建的module对象，
+此外解释器会把这个module对象的名字设置为"Colors".
 
-Later, when the body of the module definition is interpreted, a new entry is
-created in the constant table of the module object stored in the `Colors`
-constant. That entry maps the name "RED" to the string "0xff0000".
+然后，当解释器执行到module体的时候，会在模块对象(Colors)的常量表中创建一个实体，
+并存储在`Object`中. 这个实体会从"RED"映射到字符串"0xff0000".
 
-In particular, `Colors::RED` is totally unrelated to any other `RED` constant
-that may live in any other class or module object. If there were any, they
-would have separate entries in their respective constant tables.
+需要注意的是， `Colors::RED`与其他`RED`常量毫无关系，可以存在与其他类或者模块当中.
+如果有，他们会在各自的常量表中讲其拆分.
 
-Pay special attention in the previous paragraphs to the distinction between
-class and module objects, constant names, and value objects associated to them
-in constant tables.
+在前几段中特别注意，在常量表中，类和模块对象、常量名称和值对象之间的区别。
 
-### Resolution Algorithms
+### 解析算法
 
-#### Resolution Algorithm for Relative Constants
+#### Relative Constants解析算法
 
-At any given place in the code, let's define *cref* to be the first element of
-the nesting if it is not empty, or `Object` otherwise.
+在代码的任意给定位置，定义一个非空嵌套， *cref* 为第一个元素
 
-Without getting too much into the details, the resolution algorithm for relative
-constant references goes like this:
+忽略一些细节，解析算法大概是这样的:
 
-1. If the nesting is not empty the constant is looked up in its elements and in
-order. The ancestors of those elements are ignored.
+1. 如果嵌套不为空，按嵌套的元素顺序依次查找，并且忽略这些元素的祖先.
 
-2. If not found, then the algorithm walks up the ancestor chain of the cref.
+2. 如果没有找到， 则去cref的祖先链中查找.
 
-3. If not found, `const_missing` is invoked on the cref. The default
-implementation of `const_missing` raises `NameError`, but it can be overridden.
+3. 如果还是没有找到，`const_missing`方法被触发，默认会抛出`NameError`错误，
+   但是这个方法可以覆盖.
 
-Rails autoloading **does not emulate this algorithm**, but its starting point is
-the name of the constant to be autoloaded, and the cref. See more in [Relative
-References](#autoloading-algorithms-relative-references).
+Rails的自动加载与这个算法不同，但是出发点是常量的名字会自动加载，更多可查看
+[Relative References](#autoloading-algorithms-relative-references).
 
-#### Resolution Algorithm for Qualified Constants
+#### Qualified Constants解析算法
 
-Qualified constants look like this:
+Qualified constants是这样的结构:
 
 ```ruby
 Billing::Invoice
 ```
 
-`Billing::Invoice` is composed of two constants: `Billing` is relative and is
-resolved using the algorithm of the previous section.
+`Billing::Invoice`由两个常量组成，`Billing`是Relative Constants，其解析算法
+使用Relative Constants解析算法.
 
-INFO. Leading colons would make the first segment absolute rather than
-relative: `::Billing::Invoice`. That would force `Billing` to be looked up
-only as a top-level constant.
+INFO. 最前面的冒号使第一部分是绝对的，而不是相对的，比如`::Billing::Invoice`
+会只在顶层作用域中查找`Billing`
 
-`Invoice` on the other hand is qualified by `Billing` and we are going to see
-its resolution next. Let's call *parent* to that qualifying class or module
-object, that is, `Billing` in the example above. The algorithm for qualified
-constants goes like this:
+另外`Billing`决定了`Invoice`的查找路径，这种结构为有父子关系的嵌套,它的解析过程
+大概是这样的:
 
-1. The constant is looked up in the parent and its ancestors.
+1. 首先，在其父和祖先链中查找
 
-2. If the lookup fails, `const_missing` is invoked in the parent. The default
-implementation of `const_missing` raises `NameError`, but it can be overridden.
+2. 如果没有找到，`const_missing`方法被触发，默认会抛出`NameError`错误，
+   但是这个方法可以覆盖.
 
+这个解析算法比相对常量的查找简单. 注意，
 As you see, this algorithm is simpler than the one for relative constants. In
 particular, the nesting plays no role here, and modules are not special-cased,
 if neither they nor their ancestors have the constants, `Object` is **not**
 checked.
 
-Rails autoloading **does not emulate this algorithm**, but its starting point is
-the name of the constant to be autoloaded, and the parent. See more in
+Rails的自动加载与这个算法不同，但是出发点是常量的名字会自动加载，更多可查看
 [Qualified References](#qualified-references).
 
-
-Vocabulary
+名词解释
 ----------
 
 ### Parent Namespaces
@@ -330,18 +311,15 @@ Vocabulary
 Given a string with a constant path we define its *parent namespace* to be the
 string that results from removing its rightmost segment.
 
-For example, the parent namespace of the string "A::B::C" is the string "A::B",
-the parent namespace of "A::B" is "A", and the parent namespace of "A" is "".
+举个例子, "A::B::C"的父命名空间是"A::B","A::B"的父命名空间是"A"，"A"的父命名空间是"".
 
-The interpretation of a parent namespace when thinking about classes and modules
-is tricky though. Let's consider a module M named "A::B":
+当思考类和模块的时候，父名称空间的解释比较复杂。让我们考虑一个模块"A::B":
 
-* The parent namespace, "A", may not reflect nesting at a given spot.
+* 父命名空间"A"，有可能不在给定的嵌套中.
 
-* The constant `A` may no longer exist, some code could have removed it from
-`Object`.
+* 常量A有可能被其他代码从`Object`删除掉了.
 
-* If `A` exists, the class or module that was originally in `A` may not be there
+* 如果`A`存在, the class or module that was originally in `A` may not be there
 anymore. For example, if after a constant removal there was another constant
 assignment there would generally be a different object in there.
 
